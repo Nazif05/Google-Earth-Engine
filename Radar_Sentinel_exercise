@@ -1,0 +1,124 @@
+// Define the study area polygon
+var roi = ee.Geometry.Polygon([[[119, -20.75], [120.2, -20.75], [120.2, -
+22], [119, -22]]]);
+
+//Let's centre the map view over our ROI
+Map.centerObject(roi, 8);
+
+//Dispaly the shape file
+Map.addLayer(roi, {min: -14, max: -7}, 'ROI');
+
+/////////////////////////////////////////////////
+var s2 = ee.ImageCollection("COPERNICUS/S2");
+
+var rgbVis = {
+  min: 0.0,
+  max: 3000,
+  bands: ['B4', 'B3', 'B2'],
+};
+var filtered = s2.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+  .filter(ee.Filter.date('2017-01-01', '2018-01-01'))
+  .filter(ee.Filter.bounds(roi))
+ 
+var mosaic = filtered.mosaic() 
+ 
+var medianComposite = filtered.median();
+
+Map.addLayer(filtered, rgbVis, 'Filtered Collection');
+Map.addLayer(mosaic, rgbVis, 'Mosaic');
+Map.addLayer(medianComposite, rgbVis, 'Median Composite')
+
+///////////////////////////Sentinel-1///////////////////////////
+// Filter the collection for the VV product from the descending track
+var collectionVV = ee.ImageCollection('COPERNICUS/S1_GRD')
+.filter(ee.Filter.eq('instrumentMode', 'IW'))
+.filter(ee.Filter.listContains('transmitterReceiverPolarisation',
+'VV'))
+.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+.filterBounds(roi)
+.select(['VV']);
+print(collectionVV);
+
+//Calculate the VV layer and add it
+var VV = collectionVV.median();
+var VVROI = VV.clip(roi)
+Map.addLayer(VVROI, {min: -14, max: -7}, 'VV');
+
+// Filter the collection for the VH product from the descending track
+var collectionVH = ee.ImageCollection('COPERNICUS/S1_GRD')
+.filter(ee.Filter.eq('instrumentMode', 'IW'))
+.filter(ee.Filter.listContains('transmitterReceiverPolarisation',
+'VH'))
+.filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+.filterBounds(roi)
+.select(['VH']);
+print(collectionVH);
+
+//Calculate the VH layer and add it
+var VH = collectionVH.median();
+var VHROI = VH.clip(roi)
+Map.addLayer(VHROI, {min: -20, max: -7}, 'VH')
+
+///////////////////////////ALOS Data///////////////////////////
+// Filter the collection for the HH product from ALOS-2 global mosaic grid
+var ALOSHH = ee.ImageCollection('JAXA/ALOS/PALSAR/YEARLY/SAR')
+.filter(ee.Filter.date('2017-01-01', '2018-01-01'))
+.filterBounds(roi)
+.select(['HH']);
+print(ALOSHH);
+var HH = ALOSHH.median();
+var HHROI = HH.clip(roi)
+Map.addLayer(HHROI, {min: 0.0, max: 10000.0}, 'HH');
+
+// Filter the collection for the Hv product from ALOS-2 global mosaic grid
+var ALOSHV = ee.ImageCollection('JAXA/ALOS/PALSAR/YEARLY/SAR')
+.filter(ee.Filter.date('2017-01-01', '2018-01-01'))
+.filterBounds(roi)
+.select(['HV']);
+print(ALOSHV);
+var HV = ALOSHV.median();
+var HVROI = HV.clip(roi)
+Map.addLayer(HVROI, {min: 0.0, max: 1000.0}, 'HV');
+
+///////////////////////////Sentinel-2////////////////////////////////
+
+
+/*
+///////////////////////////Export the Data///////////////////////////
+// Load a landsat image and select three bands.
+Export.image.toDrive({
+image: VVROI ,
+description: 'S1-VV',
+scale: 30,
+folder: 'GEE/Pilbara/',
+fileFormat: 'GeoTIFF',
+region: roi
+});
+
+Export.image.toDrive({
+image: VHROI ,
+description: 'S1-VH',
+scale: 30,
+folder: 'GEE/Pilbara/',
+fileFormat: 'GeoTIFF',
+region: roi
+});
+
+Export.image.toDrive({
+image: HHROI ,
+description: 'ALOS-HH',
+scale: 30,
+folder: 'GEE/Pilbara/',
+fileFormat: 'GeoTIFF',
+region: roi
+});
+
+Export.image.toDrive({
+image: HVROI,
+description: 'ALOS-HV',
+scale: 30,
+folder: 'GEE/Pilbara/',
+fileFormat: 'GeoTIFF',
+region: roi
+});
+*/
