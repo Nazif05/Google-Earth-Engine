@@ -122,3 +122,12 @@ fileFormat: 'GeoTIFF',
 region: roi
 });
 */
+Export.image.toDrive({
+    image: medianComposite,
+    description: 'Sentinel_2',
+    folder: 'earthengine',
+    fileNamePrefix: 'Sentinel_2',
+    region: roi,
+    scale: 20,
+    maxPixels: 1e9
+})
