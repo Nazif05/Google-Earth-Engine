@@ -1,0 +1,526 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var table2 = 
+    /* color: #ffc82d */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[10.196473636654186, 51.905566470117],
+          [10.196473636654186, 51.51242260203049],
+          [10.921571292904186, 51.51242260203049],
+          [10.921571292904186, 51.905566470117]]], null, false);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//Instert Polygon 
+
+Map.addLayer(table2)
+
+//INSERTING DATASET--------------------------------------------------------------------------------------------------
+var collectionDN = ee.ImageCollection('ASTER/AST_L1T_003');
+
+/*
+//To be used if there are missing bands in the collection. Because some ASTER images do not contain all the bands
+// Filter - dates and boundary by geometry. collect ASTER images that have less than 10% clouds and all bands present
+
+var collectionDN = ee.ImageCollection('ASTER/AST_L1T_003') 
+        .filterBounds(AOI)
+        .filterDate('2000-01-01', '2007-01-01')
+        .filterMetadata('CLOUDCOVER', 'less_than', 10)
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B01'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B02'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B3N'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B04'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B05'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B06'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B07'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B08'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B09'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B10'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B11'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B12'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B13'))
+        .filter(ee.Filter.listContains('ORIGINAL_BANDS_PRESENT','B14'))
+        .filterMetadata('CLOUDCOVER', 'less_than', 10);
+
+*/
+//AREA SELECTION---------------------------------------------------------------------------------------------------- 
+
+// define area of interest. The script was tested in 3 chosen areas to test masking for vegetation, clouds and water
+
+//Area in Sri Lanka with a lot of cloud coverage
+
+//pilbara Grp 01
+
+var AOI = table2
+/*
+var AOISL = ee.Geometry.Polygon(
+        [[[81.1339576512143,7.0963992074598226],
+          [81.19575574691743,7.0963992074598226],
+          [81.19575574691743,7.152950728373216],
+          [81.1339576512143,7.152950728373216],
+          [81.1339576512143,7.0963992074598226]]], null, false); 
+          
+//Area 01 in Australia           
+
+var AOI1 = ee.Geometry.Polygon(
+        [[[136.17702487083392, -22.497999756527108],
+          [136.17702487083392, -22.800903179550623],
+          [136.3514328298183, -22.800903179550623],
+          [136.3514328298183, -22.497999756527108]]], null, false);
+
+//Area 02 in Australia 
+//Area used in this script
+var AOIA = ee.Geometry.Polygon(
+        [[ [128.36273793143067,-16.472198281531185],
+            [129.00818470877442,-16.472198281531185],
+            [129.00818470877442,-15.841695995371868],
+            [128.36273793143067,-15.841695995371868],
+            [128.36273793143067,-16.472198281531185]]], null, false);
+            
+*/
+//Defining dark object point for atmospheric scattering correction. 
+var drkobjct = ee.Geometry.Point(10.4278, 51.7272);
+print('dark pixel',drkobjct);
+
+// set base map to show satellite+roads
+Map.setOptions('Hybrid', {});
+// center base map to area of interest
+Map.centerObject(AOI,9);
+
+//VISUALIZATION PARAMETERS---------------------------------------------------------------------------------------
+
+var dnVis = {min: [65.0,70.0,70.0],max: [100.0,150.0,110.0], bands: ['B3N','B02','B01']};
+var radVis1 = {min: [50.0,50.0,53.0],max: [90.0,120.0,80.0], bands: ['B3N','B02','B01']};
+var regVis = {min: [1.128,0.697,1.050],max: [1.853,1.530,1.780], bands: ['B3N_1','B3N_2','B04_1']};
+var dnVis1 = {min: [361,309,1],max: [4241,2913,1961], bands: ['B3N','B02','B01']};
+var radVis = {min: [25.0,20.0,20.0],max: [110.0,150.0,130.0], bands: ['B3N','B02','B01']};
+
+
+//visualization for NDVI
+var palette1 = [
+  'FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718',
+  '74A901', '66A000', '529400', '3E8601', '207401', '056201',
+  '004C00', '023B01', '012E01', '011D01', '011301'];
+var ndviVis = {min:0, max:1, palette: palette1 };
+
+
+
+//SPATIAL FILTERING---------------------------------------------------------------------------------------------
+
+// collect ASTER images that have less than 10% clouds in the area during the specified time period
+var filtereddata = collectionDN
+        .filterBounds(AOI)
+        .filterDate('2000-01-01', '2008-01-30')
+          .filterMetadata('CLOUDCOVER', 'less_than', 5);
+        
+      
+      
+//print the amount of images present in the collection after filtering  
+print('Amount of images present: ', filtereddata.size());
+
+//Preprocessing--------------------------------------------------------------------------------------------------
+
+//Spectral Correction 
+//Conversion of raw data into radiance data
+
+var spectralCorrection = function(collection) {
+ 
+  collection = collection.map(raw2rad);
+        return(collection);
+
+   function raw2rad(img){
+    return img.select('B01').float().subtract(1).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B01','G01')).rename('B01')
+       .addBands(img.select('B02').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B02','G02')).rename('B02'))
+       .addBands(img.select('B3N').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B3N','G3N')).rename('B3N'))
+       .addBands(img.select('B04').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B04','G04')).rename('B04'))
+       .addBands(img.select('B05').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B05','G05')).rename('B05'))
+       .addBands(img.select('B06').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B06','G06')).rename('B06'))
+       .addBands(img.select('B07').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B07','G07')).rename('B07'))
+       .addBands(img.select('B08').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B08','G08')).rename('B08'))
+       .addBands(img.select('B09').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B09','G09')).rename('B09'))
+       .addBands(img.select('B10').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B10','G10')).rename('B10'))
+       .addBands(img.select('B11').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B11','G11')).rename('B11'))
+       .addBands(img.select('B12').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B12','G12')).rename('B12'))
+       .addBands(img.select('B13').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B13','G13')).rename('B13'))
+       .addBands(img.select('B14').float().subtract(1.0).multiply(ee.Image(img).metadata('GAIN_COEFFICIENT_B14','G14')).rename('B14'))
+       .set('system:time_start', img.get('system:time_start'))
+       .setMulti(img.toDictionary());
+  }
+  
+ };
+
+
+//Application of spectral correction function to the image collection
+var collectionRAD = spectralCorrection(filtereddata);
+print('ASTER RADIANCE',collectionRAD);
+
+//Data is only converted from DN values to radiance values here. Radiance to reflectance conversion was not done.
+
+//MOSAIC----------------------------------------------------------------------------------------------------------------
+
+//Mosaicking is done to spatially assemble image datasets to produce a spatially continuous image.
+//can also be done after masking for clouds, water and vegetation. 
+//Need to change the masking functions to match image collections if mosaicing is done after masking
+
+//application of mosiac
+var mosaic = collectionRAD.mosaic(); 
+//Map.addLayer(mosaic,radVis) 
+print('mosiac: ', mosaic);
+
+//Clipping the data to the area of interest
+var mosaic_AOI =  mosaic.clip(AOI);
+
+
+//CLOUD MASKING-----------------------------------------------------------------------------------------------------------
+
+
+/*
+Dark pixel substraction method to reduce atmospheric scattering
+A reflectance of dark target due to atmosphere only was assumed. Defined above in the code as "dark pixel". 
+This value was substracted from all radiances for each channel separately.
+*/
+
+var darkPixelSubstraction = function(img)
+{
+    return img.select('B01').subtract(43.940000000000005).rename('B01')
+  .addBands(img.select('B02').subtract(26.904).rename('B02'))
+  .addBands(img.select('B3N').subtract(19.826).rename('B3N'))
+  .addBands(img.select('B04').subtract(2.6088).rename('B04'))
+  .addBands(img.select('B05').subtract(0.8351999999999999).rename('B05'))
+  .addBands(img.select('B06').subtract(0.6875).rename('B06'))
+  .addBands(img.select('B07').subtract(0.7164).rename('B07'))
+  .addBands(img.select('B08').subtract(0.4587).rename('B08'))
+  .addBands(img.select('B09').subtract(0.47700000000000004).rename('B09'))
+  .addBands(img.select('B10').subtract(8.04996).rename('B10'))
+  .addBands(img.select('B11').subtract(8.79366).rename('B11'))
+  .addBands(img.select('B12').subtract(9.311670000000001).rename('B12'))
+  .addBands(img.select('B13').subtract(9.438994000000001).rename('B13'))
+  .addBands(img.select('B14').subtract(8.992225).rename('B14'))
+  .set('system:time_start', img.get('system:time_start'));
+};
+
+//function to mask thick clouds from the image. 
+//Clouds are assumed as very bright objects that have values more than 150 in B1 bands
+
+function maskCloud(image) {
+  var thickcloudProb = image.select('B01');
+  var cloud = thickcloudProb.gt(150);
+  var mask = cloud.eq(0);
+  print('Thick clouds mask: ',mask);
+  return image.updateMask(mask).
+  set('system:time_start', image.get('system:time_start'));
+}
+
+//Application of cloudmaking function to the image
+var Cloudmasked = ee.Image(maskCloud(mosaic));
+//print(Cloudmasked);
+Map.addLayer(Cloudmasked,radVis,'Cloudmasked')
+
+//Application of correction of atmospheric scattering function to the image
+var darkpixsub = ee.Image(darkPixelSubstraction(Cloudmasked));
+//Map.addLayer(darkpixsub,radVis,'haze correction')
+
+
+//INDEXES FOR WATER SOIL VEGETATION-----------------------------------------------------------------
+
+//Following indexes were defined to help with masking for vegetation water and bare soil
+
+//function to calculate NDVI(Normalized Difference Vegetation Index), SAVI(Soil-Adjusted Vegetation Index) and NDWI(Normalized Difference Water Index) for the image
+var NDVI_SAVI_MNDWI = function(img){
+    return img
+    .normalizedDifference(['B3N', 'B02']).rename('NDVI').float() //NDVI index
+    .addBands(img.expression(
+      '(1 + L) * float(nir - red)/ (nir + red + L)', {
+        'nir': img.select('B3N'),
+        'red': img.select('B02'),
+        'L': 0.5
+      }).rename('SAVI')).float() //SAVI index
+      .addBands(img.normalizedDifference(['B01', 'B3N']).rename('NDWI')).float() //NDWI index
+      .addBands(img.select('B01').rename('B01'))
+      .addBands(img.select('B02').rename('B02'))
+      .addBands(img.select('B3N').rename('B3N'))
+      .addBands(img.select('B04').rename('B04'))
+      .addBands(img.select('B05').rename('B05'))
+      .addBands(img.select('B06').rename('B06'))
+      .addBands(img.select('B07').rename('B07'))
+      .addBands(img.select('B08').rename('B08'))
+      .addBands(img.select('B09').rename('B09'))
+      .addBands(img.select('B10').rename('B10'))
+      .addBands(img.select('B11').rename('B11'))
+      .addBands(img.select('B12').rename('B12'))
+      .addBands(img.select('B13').rename('B13'))
+      .addBands(img.select('B14').rename('B14'))
+    .set('system:time_start', img.get('system:time_start'));
+  };
+
+//Application of NDVI,SAVI,MNDWI function to the image
+var NDVI_SAVI_MNDWI = ee.Image(NDVI_SAVI_MNDWI(Cloudmasked));
+print('NDVI_SAVI_MNDWI Output: ',NDVI_SAVI_MNDWI);
+
+
+//MASKING FOR WATER AND VEGETATION=-------------------------------------------------------------
+
+//mask for water using band values. Here values less than 0 in band B06 is identified as water
+function WaterMask1(image) {
+    var water = image.select('B06');
+    var Wter = water.lt(1);
+    var mask = Wter.eq(0);
+  print('mask: ',mask);
+  return image.updateMask(mask)
+  set('system:time_start', image.get('system:time_start'));
+}
+
+//mask for water using Normalized Difference Water Index(NDWI).Here values less than 0.05 in NDWI index is identified as water
+function WaterMask2(image) {
+  var water = image.select('NDWI');
+  var mask = water.lt(0.05)
+  print(' Water mask: ',mask)
+  return image.updateMask(mask).
+  set('system:time_start', image.get('system:time_start'));
+}
+
+
+//Application of water mask1 to the study area
+var watermask1 = ee.Image(WaterMask1(NDVI_SAVI_MNDWI))
+//Map.addLayer(watermask1,radVis,'water correction1') 
+
+
+//water mask 2 is not applied in the script initially. Can be added based on the area to get a more accurate output  
+var watermask2 = ee.Image(WaterMask2(NDVI_SAVI_MNDWI))
+//print('watermask2',watermask2)
+//Map.addLayer(watermask2,radVis,'water correction2')
+
+//mask for vegetation using Normalized Difference Vegetation Index(NDVI)
+
+function VegetationMask(image) {
+  var vegetation = image.select('NDVI');
+  var mask = vegetation.lt(0.3)
+  print('Vegetation mask: ',mask)
+  return image.updateMask(mask).
+  set('system:time_start', image.get('system:time_start'));
+}
+
+//Application of vegetation mask to the study area
+
+var vegetationmask = ee.Image(VegetationMask(watermask1))
+Map.addLayer(vegetationmask,radVis,'vegetation correction') 
+
+
+//Mask to only select bare soil area
+//This mask was not used in this script. Can be used to mask vegetation 
+function BareSoil(image) {
+  var Bare_Soil = image.select('SAVI');
+  var mask = Bare_Soil.lt(0.2)
+  print('Bare soil mask: ',mask)
+  return image.updateMask(mask).
+  set('system:time_start', image.get('system:time_start'));
+}
+
+//var BareSoilmask = ee.Image(BareSoil(NDVI_SAVI_MNDWI))
+//Map.addLayer(BareSoilmask,radVis,'Bare Soil') 
+
+
+//SPECTRAL INDICES-----------------------------------------------------------------------------
+
+// Functions for spectral indices specific to ASTER radiance data
+
+//Function to calculate Normalized Difference Vegetation Index (NDVI) and Soil-Adjusted Vegetation Index (SAVI)
+
+var NDVI_SAVI = function(img){
+    return img
+    .normalizedDifference(['B3N', 'B02']).rename('NDVI').float() //NDVI index
+    .addBands(img.expression(
+      '(1 + L) * float(nir - red)/ (nir + red + L)', {
+        'nir': img.select('B3N'),
+        'red': img.select('B02'),
+        'L': 0.5
+      }).rename('SAVI')).float() //SAVI index
+    .set('system:time_start', img.get('system:time_start'));
+  }
+
+//application of the function to the image
+var NDVI_SAVI = ee.Image(NDVI_SAVI(vegetationmask))
+print('NDVI and SAVI Output: ',NDVI_SAVI)
+
+
+//Visualization of NDVI
+//Map.addLayer(NDVI_SAVI.select('NDVI'),ndviVis,'NDVI')
+
+//Visualization of SAVI
+//Map.addLayer(NDVI_SAVI.select('SAVI'),ndviVis,'SAVI')
+
+//Clipping the data to the area of interest
+var NDVI_SAVI_AOI =  NDVI_SAVI.clip(AOI)
+  
+//GEOLOGICAL INDICES---------------------------------------------------------------------------------------
+
+//Functions for different Geological indices are scripted below. 
+//Each index is scripted as a seperate function because its easier to call each function when necessary
+
+
+
+var RegolithRatios = function(img)
+{
+  return img.addBands(img.select('B3N').divide(img.select('B02')).rename('R'))
+  .addBands(img.select('B3N').divide(img.select('B07')).rename('G'))
+  .addBands(img.select('B04').divide(img.select('B07')).rename('B'))
+  .set('system:time_start', img.get('system:time_start'));
+}
+
+//application of spectral indices function to the masked image  
+var Regolith_Ratios =  ee.Image(RegolithRatios(vegetationmask))
+
+var GreenVegetationContent = function(img){
+    return img
+      .addBands(img.expression(
+      'B3/B2', {
+        'B1': img.select('BN3'),
+        'B4': img.select('B02')
+      }).float().rename('Green Vegetation Content')).float()
+      
+    .set('system:time_start', img.get('system:time_start'));
+  };
+
+//Function to generate spectral indices for each mineral group 
+var SpectralIndices = function(img){
+    return img
+     .addBands(img.expression(
+      'B4/B3', {
+        'B4': img.select('B04'),
+        'B3': img.select('B3N')
+      }).float().rename('FerricOxideContent')).float()  
+      .addBands(img.expression(
+      'B2/B1', {
+        'B2': img.select('B02'),
+        'B1': img.select('B01')
+      }).float().rename('FerricOxideComposition')).float()  
+      .addBands(img.expression(
+      'B5/B4', {
+        'B5': img.select('B05'),
+        'B4': img.select('B04')
+      }).float().rename('FerrousIronIndex')).float() 
+      .addBands(img.expression(
+      'B1/B4', {
+        'B1': img.select('B01'),
+        'B4': img.select('B04')
+      }).float().rename('Opaque_index')).float()
+      .addBands(img.expression(
+      '(B5+B7)/B6', {
+        'B5': img.select('B05'),
+        'B6': img.select('B06'),
+        'B7': img.select('B07')
+      }).float().rename('ALOHgroupContent')).float()
+      .addBands(img.expression(
+      'B5/B7', {
+        'B5': img.select('B05'),
+        'B7': img.select('B07')
+      }).float().rename('ALOHgroupComposition')).float()
+      .addBands(img.expression(
+      'B6/B5', {
+        'B6': img.select('B06'),
+        'B5': img.select('B05')
+      }).float().rename('KaolinGroupIndex')).float()
+       .addBands(img.expression(
+      '(B6+B8)/B7', {
+        'B6': img.select('B06'),
+        'B7': img.select('B07'),
+        'B8': img.select('B08')
+      }).float().rename('FeOHGroupContent')).float()
+      .addBands(img.expression(
+      '(B6+B9)/(B7+B8)', {
+        'B6': img.select('B06'),
+        'B7': img.select('B07'),
+        'B8': img.select('B08'),
+        'B9': img.select('B09')
+      }).float().rename('MgOHGroupContent')).float()
+      .addBands(img.expression(
+      'B7/B8', {
+        'B7': img.select('B07'),
+        'B8': img.select('B08')
+      }).float().rename('MgOHGroupComposition')).float()
+      .addBands(img.expression(
+      'B5/B4', {
+        'B5': img.select('B05'),
+        'B4': img.select('B04')
+      }).float().rename('FerrousIonContent_in_MgOH_or_Carbonate')).float()
+    .set('system:time_start', img.get('system:time_start'));
+  };
+
+//application of spectral indices function to the masked image  
+var GeologicalIndices =  ee.Image(SpectralIndices(vegetationmask))
+print('Geological Spectral Indices',GeologicalIndices)
+
+//Clipping the data to the area of interest
+var GeologicalIndicesAOI =  GeologicalIndices.clip(AOI) 
+print('Geological Indices of the Area of Interest: ',GeologicalIndicesAOI)
+
+//FINAL VISUALIZATIONS----------------------------------------------------------------------
+
+
+// visualize the mean of the DN and Radiance data
+
+//Map.addLayer(filtereddata.mean(), dnVis, 'ASTER DN values');
+//Map.addLayer(collectionRAD.mean(), RadVis, 'ASTER RADIANCE values');
+
+//False colour composite visualization of data- (mentioned in the literature)- For better identification for whats in the image
+//Map.addLayer(mosaic,{max: [96.39,96.91,99.99],min: [57.59,70.87,80.39], bands: ['B3N','B02','B01']},'False Colour composite')
+
+//visualization for Regolith ratios - inaccurate visualization
+//Map.addLayer(Regolith_Ratios,{max: [0.98872,0.99303,0.9895],min: [0.98147,0.9847,0.9822], bands: ['R','G','B']},'Regolith_Ratios')
+
+//Visualizations for Geological Indices-----------------------------------------------------
+
+//Visualizations for a few geological indices are displayed below
+//Visualizations does not make sense. possibly due to wrong stretch values.
+
+Map.addLayer(GeologicalIndicesAOI.select('FerricOxideContent'),{min:0.12 , max:0.34353 ,palette: ['red','green','blue']},'FeOxideContent')
+
+Map.addLayer(GeologicalIndicesAOI.select('FerricOxideComposition'),{min: 0.595, max: 3.116  ,palette: ['red','green','blue']},'FerricOxideComposition')
+
+Map.addLayer(GeologicalIndicesAOI.select('FerrousIronIndex'),{min:0.18 , max:0.34353 ,palette: ['red','green','blue']},'FerrousIronIndex')
+
+Map.addLayer(GeologicalIndicesAOI.select('ALOHgroupContent'),{min:0.9802 , max:2.439 ,palette: ['red','green','blue']},'ALOHgroupContent')
+
+Map.addLayer(GeologicalIndicesAOI.select('KaolinGroupIndex'),{min:0.778 , max:1.125 ,palette: ['red','green','blue']},'KaolinGroupIndex')
+
+/*
+//OUTPUT DATA TO DRIVE----------------------------------------------------------------------
+
+
+//Exports output images to the drive
+
+//Exporting converted radiance data in the area of interest
+Export.image.toDrive({
+    image: mosaic_AOI,
+    description: 'RadianceDataofChosenArea',
+    folder: 'ASTER_GEE_Outputs-GRS01',
+    fileNamePrefix: 'Aster',
+    region: AOI,
+    scale: 30,
+    maxPixels: 1e9
+})
+
+//Exporting NDVI and SAVI indices in the area of interest
+Export.image.toDrive({
+    image: NDVI_SAVI_AOI,
+    description: 'NDVI_SAVI_images',
+    folder: 'ASTER_GEE_Outputs-GRS01',
+    fileNamePrefix: 'Aster',
+    region: AOI,
+    scale: 30,
+    maxPixels: 1e9
+})
+
+//Exporting spectral indices in the area of interest
+Export.image.toDrive({
+    image: GeologicalIndicesAOI,
+    description: 'Aster_Geological_Indices',
+    folder: 'ASTER_GEE_Outputs-GRS01',
+    fileNamePrefix: 'Aster',
+    region: AOI,
+    scale: 30,
+    maxPixels: 1e9
+})
+*/
