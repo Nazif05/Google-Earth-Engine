@@ -1,3 +1,10 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var imageVisParam = {"opacity":1,"bands":["5_6_Argillic"],"min":1.0567656327503314,"max":1.157383580086888,"palette":["ff0000","008000","0000ff"]},
+    imageVisParam2 = {"opacity":1,"bands":["7_6_Argillic"],"min":0.8322188708586927,"max":0.9352778035536434,"palette":["ff0000","008000","0000ff"]},
+    imageVisParam3 = {"opacity":1,"bands":["7_5_Argillic"],"min":0.7471907373391543,"max":0.8495982887683892,"palette":["ff0000","008000","0000ff"]},
+    imageVisParam4 = {"opacity":1,"bands":["1_2_3_5_SiFe"],"min":0.9499492429374372,"max":1.2273142720145247,"palette":["ff0000","008000","0000ff"]},
+    imageVisParam5 = {"opacity":1,"bands":["14_12_SiFe"],"min":0.9460478176825871,"max":1.0794202917564721,"palette":["ff0000","008000","0000ff"]};
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
 var geometry = 
     /* color: #98ff00 */
     /* shown: false */
@@ -256,14 +263,14 @@ var NDVI_SAVI = function(img){
         'L': 0.5
       }).rename('SAVI')).float() //SAVI index
     .set('system:time_start', img.get('system:time_start'));
-  }
-
+  };
+  
 // application of the function to the image
-var NDVI_SAVI = ee.Image(NDVI_SAVI(vegetationmask))
-print('NDVI and SAVI Output: ',NDVI_SAVI)
+var NDVI_SAVI = ee.Image(NDVI_SAVI(vegetationmask));
+print('NDVI and SAVI Output: ',NDVI_SAVI);
 
 //Clipping the data to the area of interest
-var NDVI_SAVI_AOI =  NDVI_SAVI.clip(AOI)
+var NDVI_SAVI_AOI =  NDVI_SAVI.clip(AOI);
   
 //GEOLOGICAL INDICES---------------------------------------------------------------------------------------
 
@@ -276,10 +283,10 @@ var RegolithRatios = function(img)
   .addBands(img.select('B3N').divide(img.select('B07')).rename('G'))
   .addBands(img.select('B04').divide(img.select('B07')).rename('B'))
   .set('system:time_start', img.get('system:time_start'));
-}
+};
 
 //application of spectral indices function to the masked image  
-var Regolith_Ratios =  ee.Image(RegolithRatios(vegetationmask))
+var Regolith_Ratios =  ee.Image(RegolithRatios(vegetationmask));
 
 var GreenVegetationContent = function(img){
     return img
@@ -296,9 +303,9 @@ var GreenVegetationContent = function(img){
 var SpectralIndices = function(img){
     return img
      .addBands(img.expression(
-      'B4/B3', {
+      'B4/B3N', {
         'B4': img.select('B04'),
-        'B3': img.select('B3N')
+        'B3N': img.select('B3N')
       }).float().rename('FerricOxideContent')).float()  
       .addBands(img.expression(
       'B2/B1', {
@@ -365,45 +372,81 @@ var SpectralIndices = function(img){
         'B5': img.select('B05')
       }).float().rename('ClayIndex')).float()
       .addBands(img.expression(
+      'B7/B5', {
+        'B7': img.select('B07'),
+        'B5': img.select('B05')
+      }).float().rename('7_5_Argillic')).float()
+      .addBands(img.expression(
+      'B7/B6', {
+        'B7': img.select('B07'),
+        'B6': img.select('B06')
+      }).float().rename('7_6_Argillic')).float()
+      .addBands(img.expression(
+      'B5/B6', {
+        'B5': img.select('B05'),
+        'B6': img.select('B06')
+      }).float().rename('5_6_Argillic')).float()
+      .addBands(img.expression(
       'B4/B7', {
         'B4': img.select('B04'),
         'B7': img.select('B07')
       }).float().rename('SericiticZone')).float()
+      .addBands(img.expression(
+      'B14/B12', {
+        'B14': img.select('B14'),
+        'B12': img.select('B12')
+      }).float().rename('14_12_SiFe')).float()
+      .addBands(img.expression(
+      '(B1/B2)+(B5/B3N)', {
+        'B1': img.select('B01'),
+        'B2': img.select('B02'),
+        'B3N': img.select('B3N'),
+        'B5': img.select('B05')
+      }).float().rename('1_2_3_5_SiFe')).float()
     .set('system:time_start', img.get('system:time_start'));
   };
 
 //application of spectral indices function to the masked image  
-var GeologicalIndices =  ee.Image(SpectralIndices(vegetationmask))
-print('Geological Spectral Indices',GeologicalIndices)
+var GeologicalIndices =  ee.Image(SpectralIndices(vegetationmask));
+print('Geological Spectral Indices',GeologicalIndices);
 
 //Clipping the data to the area of interest
-var GeologicalIndicesAOI =  GeologicalIndices.clip(AOI) 
-print('Geological Indices of the Area of Interest: ',GeologicalIndicesAOI)
+var GeologicalIndicesAOI =  GeologicalIndices.clip(AOI);
+print('Geological Indices of the Area of Interest: ',GeologicalIndicesAOI);
 
 //Visualizations for Geological Indices-----------------------------------------------------
 
-//Visualizations for a few geological indices are displayed below
-//Visualizations does not make sense. possibly due to wrong stretch values.
+//Visualizations for alteration minerals are displayed below
 
-Map.addLayer(GeologicalIndicesAOI.select('FerricOxideContent'),{min: 0.21 , max: 0.31 ,palette: ['red','green','blue']},'FeOxideContent')
+Map.addLayer(GeologicalIndicesAOI.select('FerricOxideContent'),{min: 0.21 , max: 0.31 ,palette: ['red','green','blue']},'FeOxideContent');
 
-Map.addLayer(GeologicalIndicesAOI.select('FerricOxideComposition'),{min: 0.87 , max: 1.13 ,palette: ['red','green','blue']},'FerricOxideComposition')
+Map.addLayer(GeologicalIndicesAOI.select('FerricOxideComposition'),{min: 0.87 , max: 1.13 ,palette: ['red','green','blue']},'FerricOxideComposition');
 
-Map.addLayer(GeologicalIndicesAOI.select('FerrousIronIndex'),{min: 0.32 , max: 0.38 ,palette: ['red','green','blue']},'FerrousIronIndex')
+Map.addLayer(GeologicalIndicesAOI.select('FerrousIronIndex'),{min: 0.32 , max: 0.38 ,palette: ['red','green','blue']},'FerrousIronIndex');
 
-Map.addLayer(GeologicalIndicesAOI.select('ALOHgroupContent'),{min: 1.90 , max: 2.07 ,palette: ['red','green','blue']},'ALOHgroupContent')
+Map.addLayer(GeologicalIndicesAOI.select('ALOHgroupContent'),{min: 1.90 , max: 2.07 ,palette: ['red','green','blue']},'ALOHgroupContent');
 
-Map.addLayer(GeologicalIndicesAOI.select('KaolinGroupIndex'),{min: 0.86 , max: 0.94 ,palette: ['red','green','blue']},'KaolinGroupIndex')
+Map.addLayer(GeologicalIndicesAOI.select('KaolinGroupIndex'),{min: 0.86 , max: 0.94 ,palette: ['red','green','blue']},'KaolinGroupIndex');
 
-Map.addLayer(GeologicalIndicesAOI.select('HydrousMinerals'),{min: 2.88 , max: 3.38 ,palette: ['red','green','blue']},'HydrousMinerals')
+Map.addLayer(GeologicalIndicesAOI.select('HydrousMinerals'),{min: 2.88 , max: 3.38 ,palette: ['red','green','blue']},'HydrousMinerals');
 
-Map.addLayer(GeologicalIndicesAOI.select('MgOHGroupContent'),{min: 0.93 , max: 1.05 ,palette: ['red','green','blue']},'MgOHGroupContent')
+Map.addLayer(GeologicalIndicesAOI.select('MgOHGroupContent'),{min: 0.93 , max: 1.05 ,palette: ['red','green','blue']},'MgOHGroupContent');
 
-Map.addLayer(GeologicalIndicesAOI.select('ArgillicZone'),{min: 2.61 , max: 3.05 ,palette: ['red','green','blue']},'ArgillicZone')
+Map.addLayer(GeologicalIndicesAOI.select('ArgillicZone'),{min: 2.61 , max: 3.05 ,palette: ['red','green','blue']},'ArgillicZone');
 
-Map.addLayer(GeologicalIndicesAOI.select('SericiticZone'),{min: 3.36 , max: 3.74 ,palette: ['red','green','blue']},'SericiticZone')
+Map.addLayer(GeologicalIndicesAOI.select('SericiticZone'),{min: 3.36 , max: 3.74 ,palette: ['red','green','blue']},'SericiticZone');
 
-Map.addLayer(GeologicalIndicesAOI.select('ClayIndex'),{min: 0.44 , max: 0.50 ,palette: ['red','green','blue']},'ClayIndex')
+Map.addLayer(GeologicalIndicesAOI.select('ClayIndex'),{min: 0.44 , max: 0.50 ,palette: ['red','green','blue']},'ClayIndex');
+
+Map.addLayer(GeologicalIndicesAOI.select('7_5_Argillic'),{min: 0.74 , max: 0.84 ,palette: ['red','green','blue']},'7_5_Argillic');
+
+Map.addLayer(GeologicalIndicesAOI.select('7_6_Argillic'),{min: 0.83 , max: 0.93 ,palette: ['red','green','blue']},'7_6_Argillic');
+
+Map.addLayer(GeologicalIndicesAOI.select('5_6_Argillic'),{min: 1.05 , max: 1.15 ,palette: ['red','green','blue']},'5_6_Argillic');
+
+Map.addLayer(GeologicalIndicesAOI.select('14_12_SiFe'),{min: 0.94 , max: 1.07 ,palette: ['red','green','blue']},'14_12_SiFe');
+
+Map.addLayer(GeologicalIndicesAOI.select('1_2_3_5_SiFe'),{min: 0.95 , max: 1.22 ,palette: ['red','green','blue']},'1_2_3_5_SiFe');
 
 /*
 
@@ -421,15 +464,15 @@ Export.image.toDrive({
     scale: 30,
     maxPixels: 1e9
 })
+*/
 
 //Exporting spectral indices in the area of interest
 Export.image.toDrive({
     image: GeologicalIndicesAOI,
-    description: 'Aster_Geological_Indices',
-    folder: 'ASTER_GEE_Outputs-GRS01',
+    description: 'Alteration_Minerals_Indices',
+    folder: 'ASTER_GEE_Outputs-Saudi',
     fileNamePrefix: 'Aster',
     region: AOI,
-    scale: 30,
+    scale: 20,
     maxPixels: 1e9
 })
-*/
